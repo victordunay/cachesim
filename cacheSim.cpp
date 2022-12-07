@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include "cache.cpp"
 
 using std::FILE;
 using std::string;
@@ -13,7 +14,20 @@ using std::cerr;
 using std::ifstream;
 using std::stringstream;
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv) 
+{
+	return_code_t return_code = UNINITIALIZED;
+
+	cache_t cache_parameters;
+	
+	unsigned l1_num_of_sets = 0;
+	unsigned l2_num_of_sets = 0;
+	unsigned l1_num_of_set_bits = 0;
+	unsigned l2_num_of_set_bits = 0;
+	unsigned l1_num_of_tag_bits = 0;
+	unsigned l2_num_of_tag_bits = 0;
+
+	memset(&cache_parameters, 0, sizeof(cache_t));
 
 	if (argc < 19) {
 		cerr << "Not enough arguments" << endl;
@@ -62,6 +76,61 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	cache_parameters.block_size_in_bytes = SHIFT_LEFT(BSize);
+    cache_parameters.l1_ways = SHIFT_LEFT(L1Assoc);
+    cache_parameters.l2_ways = SHIFT_LEFT(L2Assoc);
+	cache_parameters.l1_size_in_bytes = SHIFT_LEFT(L1Size);
+    cache_parameters.l2_size_in_bytes = SHIFT_LEFT(L2Size);
+	cache_parameters.memory_access_time = MemCyc;
+    cache_parameters.l1_access_time = L1Cyc;
+	cache_parameters.l2_access_time = L1Cyc;
+    cache_parameters.miss_policy = (miss_policy_t)WrAlloc;
+	cache_parameters.l1 = NULL;
+	cache_parameters.l1 = NULL;
+	cache_parameters.l1_tags = NULL;
+	cache_parameters.l2_tags = NULL;
+	cache_parameters.l1_status = NULL;
+	cache_parameters.l2_status = NULL;
+
+	(void)calculate_num_of_sets(&l1_num_of_sets, cache_parameters.l1_size_in_bytes, cache_parameters.block_size_in_bytes, cache_parameters.l1_ways);
+	(void)calculate_num_of_sets(&l2_num_of_sets, cache_parameters.l2_size_in_bytes, cache_parameters.block_size_in_bytes, cache_parameters.l2_ways);
+	
+	(void)calculate_num_of_set_bits(l1_num_of_sets, &l1_num_of_set_bits);
+	(void)calculate_num_of_set_bits(l2_num_of_sets, &l2_num_of_set_bits);
+	(void)calculate_num_of_tag_bits(l1_num_of_set_bits, BSize, &l1_num_of_tag_bits);
+	(void)calculate_num_of_tag_bits(l2_num_of_set_bits, BSize, &l2_num_of_tag_bits);
+
+
+	(void)calculate_mask(l1_num_of_set_bits, &cache_parameters.l1_set_mask);
+	(void)calculate_mask(l2_num_of_set_bits, &cache_parameters.l2_set_mask);
+	(void)calculate_mask(l1_num_of_tag_bits, &cache_parameters.l1_tag_mask);
+	(void)calculate_mask(l2_num_of_tag_bits, &cache_parameters.l2_tag_mask);
+	(void)calculate_mask(BSize, &cache_parameters.l1_offset_in_block_mask);
+	(void)calculate_mask(BSize, &cache_parameters.l2_offset_in_block_mask);
+
+	cache_parameters.l1_set_offset = BSize;
+	cache_parameters.l2_set_offset = BSize;
+	cache_parameters.l1_tag_offset = BSize + l1_num_of_tag_bits;
+	cache_parameters.l2_tag_offset = BSize + l2_num_of_tag_bits;
+
+	(void)cache_struct_allocation(&cache);
+	(void)assign_cache_parameters(&cache, cache_parameters);
+
+	(void)cache_memory_allocation(&cache->l1, cache->l1_ways, cache->l1_size_in_bytes);
+	(void)cache_memory_allocation(&cache->l2, cache->l2_ways, cache->l2_size_in_bytes);
+	(void)cache_tags_allocation(&cache->l1_tags, cache->l1_ways, cache->block_size_in_bytes, cache->l1_size_in_bytes);
+	(void)cache_tags_allocation(&cache->l2_tags, cache->l2_ways, cache->block_size_in_bytes, cache->l2_size_in_bytes);
+	(void)cache_set_status_allocation(&cache->l1_status, cache->l1_ways, cache->block_size_in_bytes, cache->l1_size_in_bytes);
+	(void)cache_set_status_allocation(&cache->l2_status, cache->l2_ways, cache->block_size_in_bytes, cache->l2_size_in_bytes);
+
+	(void)initialize_cache_memory(&cache->l1, cache->l1_ways, cache->l1_size_in_bytes);
+	(void)initialize_cache_memory(&cache->l2, cache->l2_ways, cache->l2_size_in_bytes);
+	(void)initialize_cache_tags(&cache->l1_tags, cache->l1_ways, cache->block_size_in_bytes, cache->l1_size_in_bytes);
+	(void)initialize_cache_tags(&cache->l2_tags, cache->l2_ways, cache->block_size_in_bytes, cache->l2_size_in_bytes);
+	(void)initialize_cache_set_status(&cache->l1_status, cache->l1_ways, cache->block_size_in_bytes, cache->l1_size_in_bytes);
+	(void)initialize_cache_set_status(&cache->l2_status, cache->l2_ways, cache->block_size_in_bytes, cache->l2_size_in_bytes);
+
+
 	while (getline(file, line)) {
 
 		stringstream ss(line);
@@ -97,5 +166,6 @@ int main(int argc, char **argv) {
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
 
+cleanup:
 	return 0;
 }
