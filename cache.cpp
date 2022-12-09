@@ -56,6 +56,7 @@ typedef struct
     char * block;
     unsigned tag;
     status_t status;
+    bool dirty;
 } set_t;
 
 typedef enum
@@ -136,6 +137,11 @@ public:
     int get_value_from_cache(unsigned set_index, unsigned offset_in_block)
     {
         return sets[set_index].block[offset_in_block];
+    }
+    
+    bool is_dirty(unsigned set_index)
+    {
+        return sets[set_index].dirty;
     }
  
     ~Way() {};
@@ -297,6 +303,7 @@ public:
         char * block_source_for_copy = NULL;
         char * block_dest_for_copy = NULL;
         result_t result = MISS;
+        bool is_dirty = false;
 
         (void)l1->search_address_in_cache(address, value, &result, &block_source_for_copy);
         if (HIT == result)
@@ -310,7 +317,12 @@ public:
             {
                 if (WRITE_ALLOCATE == miss_policy)
                 {           
-                    free_block_from_lru_way(l1, address, &block_dest_for_copy);
+                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty);
+                    if (is_dirty)
+                    {
+
+                    }
+                    memset(block_dest_for_copy, 0, block_size_in_bytes);
                     copy_block(block_source_for_copy, block_dest_for_copy);
                 }
             }
@@ -318,18 +330,26 @@ public:
             {
                 if (WRITE_ALLOCATE == miss_policy)
                 {                    
-                    free_block_from_lru_way(l2, address, &block_dest_for_copy);
+                    free_block_from_lru_way(l2, address, &block_dest_for_copy, &is_dirty);
+                    if (is_dirty)
+                    {
+                        
+                    }
                     block_source_for_copy = (char *)&address;
                     copy_block(block_source_for_copy, block_dest_for_copy);
 
-                    free_block_from_lru_way(l1, address, &block_dest_for_copy);
+                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty);
+                    if (is_dirty)
+                    {
+                        
+                    }
                     copy_block(block_source_for_copy, block_dest_for_copy);
                 }
             }
         }
     }
 
-    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, char ** block_dest_for_copy)
+    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, char ** block_dest_for_copy, bool * is_dirty)
     {
         unsigned lru_way = 0;
         unsigned way_index = 0;
@@ -344,7 +364,7 @@ public:
         (void)l1->get_set_from_address(&set_index, address);
 
         *block_dest_for_copy = cache_level->ways[lru_way].sets[set_index].block;
-        memset(*block_dest_for_copy, 0, block_size_in_bytes);
+        *is_dirty = cache_level->ways[lru_way].is_dirty(set_index);
     }
 
 

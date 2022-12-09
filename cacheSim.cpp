@@ -138,10 +138,10 @@ int main(int argc, char **argv)
 
 		unsigned long int num = 0;
 		num = strtoul(cutAddress.c_str(), NULL, 16);
-		(void)cache.operation_handler((operation_t)operation, trace_address, (int *)&num);
 
 		// DEBUG - remove this line
 		cout << " (dec) " << num << endl;
+		(void)cache.operation_handler((operation_t)operation, trace_address, (int *)&num);
 
 	}
 
