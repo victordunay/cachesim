@@ -13,6 +13,34 @@ using std::endl;
 using std::cerr;
 using std::ifstream;
 using std::stringstream;
+//************************************************************************************************
+//									GLOBAL CLASS 
+//************************************************************************************************
+
+class CACHE {
+	public:
+	unsigned cache_size,cache_associative;
+	int way_size;
+	//way 
+	// LRU;  // arr of LRU for each way
+	
+	CACHE(){};
+	CACHE(unsigned cache_size, unsigned cache_associative)
+		{
+			//init of the cache parameter
+		}
+};
+class BLOCK {
+	public:
+		int tag;
+		bool valid_bit ,dirty_bit;
+		BLOCK()
+		{
+			tag=0;
+			valid_bit=false;
+			dirty_bit=false;
+		}
+};
 
 int main(int argc, char **argv) 
 {
