@@ -55,6 +55,10 @@ typedef struct
 {
     char * block;
     unsigned tag;
+//    there is allways valid, and allways LRU. NO dirty bit when write-through 
+    bool valid;
+    int LRU;
+
     status_t status;
     bool dirty;
 } set_t;
@@ -259,6 +263,27 @@ public:
         }
     }
 
+
+    void search_block_for_update(uint32_t address, char ** block)
+    {
+        unsigned required_tag = 0;
+        unsigned cache_tag = 0;
+        unsigned set_index = 0;
+        unsigned way_index = 0;
+
+        (void)get_tag_from_address(&required_tag, address);
+        (void)get_set_from_address(&set_index, address);
+
+        for (way_index = 0; way_index < num_of_ways; ++way_index)
+        {
+            ways[way_index].get_tag_from_set(set_index, &cache_tag);
+            if (cache_tag == required_tag & !ways[way_index].is_empty_set(set_index))
+            {
+                *block = ways[way_index].sets[set_index].block;
+            }
+        }
+    }
+
     ~CacheLevel() {};
 };
 
@@ -302,8 +327,10 @@ public:
     {
         char * block_source_for_copy = NULL;
         char * block_dest_for_copy = NULL;
+        char * block_dest_for_update = NULL;
         result_t result = MISS;
         bool is_dirty = false;
+        uint32_t evacuated_address = 0;
 
         (void)l1->search_address_in_cache(address, value, &result, &block_source_for_copy);
         if (HIT == result)
@@ -317,12 +344,12 @@ public:
             {
                 if (WRITE_ALLOCATE == miss_policy)
                 {           
-                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty);
+                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
                     if (is_dirty)
                     {
-
+                        (void)l2->search_block_for_update(evacuated_address, &block_dest_for_update);
+                        copy_block(block_dest_for_copy, block_dest_for_update);
                     }
-                    memset(block_dest_for_copy, 0, block_size_in_bytes);
                     copy_block(block_source_for_copy, block_dest_for_copy);
                 }
             }
@@ -330,18 +357,21 @@ public:
             {
                 if (WRITE_ALLOCATE == miss_policy)
                 {                    
-                    free_block_from_lru_way(l2, address, &block_dest_for_copy, &is_dirty);
+                    free_block_from_lru_way(l2, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
                     if (is_dirty)
                     {
-                        
+                        block_dest_for_update = (char *)&evacuated_address;
+                        copy_block(block_dest_for_copy, block_dest_for_update);
                     }
                     block_source_for_copy = (char *)&address;
+
                     copy_block(block_source_for_copy, block_dest_for_copy);
 
-                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty);
+                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
                     if (is_dirty)
                     {
-                        
+                        (void)l2->search_block_for_update(evacuated_address, &block_dest_for_update);
+                        copy_block(block_dest_for_copy, block_dest_for_update);
                     }
                     copy_block(block_source_for_copy, block_dest_for_copy);
                 }
@@ -349,11 +379,12 @@ public:
         }
     }
 
-    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, char ** block_dest_for_copy, bool * is_dirty)
+    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, char ** block_dest_for_copy, bool * is_dirty, uint32_t * evacuated_address)
     {
         unsigned lru_way = 0;
         unsigned way_index = 0;
         unsigned set_index = 0;
+        unsigned tag = 0;
         for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
         {
             if (lru_way < cache_level->ways[way_index].lru_index)
@@ -365,6 +396,8 @@ public:
 
         *block_dest_for_copy = cache_level->ways[lru_way].sets[set_index].block;
         *is_dirty = cache_level->ways[lru_way].is_dirty(set_index);
+        tag = cache_level->ways[lru_way].sets[set_index].tag;
+        *evacuated_address = (set_index << cache_level->num_of_block_bits) | (tag << (cache_level->num_of_block_bits + cache_level->calculate_num_of_sets)); 
     }
 
 
