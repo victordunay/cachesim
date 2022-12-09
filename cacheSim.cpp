@@ -13,34 +13,6 @@ using std::endl;
 using std::cerr;
 using std::ifstream;
 using std::stringstream;
-//************************************************************************************************
-//									GLOBAL CLASS 
-//************************************************************************************************
-
-class CACHE {
-	public:
-	unsigned cache_size,cache_associative;
-	int way_size;
-	//way 
-	// LRU;  // arr of LRU for each way
-	
-	CACHE(){};
-	CACHE(unsigned cache_size, unsigned cache_associative)
-		{
-			//init of the cache parameter
-		}
-};
-class BLOCK {
-	public:
-		int tag;
-		bool valid_bit ,dirty_bit;
-		BLOCK()
-		{
-			tag=0;
-			valid_bit=false;
-			dirty_bit=false;
-		}
-};
 
 int main(int argc, char **argv) 
 {
@@ -111,7 +83,7 @@ int main(int argc, char **argv)
     cache_parameters.l2_size_in_bytes = SHIFT_LEFT(L2Size);
 	cache_parameters.memory_access_time = MemCyc;
     cache_parameters.l1_access_time = L1Cyc;
-	cache_parameters.l2_access_time = L1Cyc;
+	cache_parameters.l2_access_time = L2Cyc;
     cache_parameters.miss_policy = (miss_policy_t)WrAlloc;
 	cache_parameters.l1 = NULL;
 	cache_parameters.l1 = NULL;
@@ -132,7 +104,7 @@ int main(int argc, char **argv)
 	printf("    tag_offset_in_bits = %d\n", cache.l1->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l1->num_of_block_bits);
 	printf("    num_of_sets = %d\n", cache.l1->num_of_sets);
-	printf("    miss_policy = %d\n", cache.l1->miss_policy);
+	printf("    miss_policy = %d\n\n", cache.l1->miss_policy);
 	printf("L2 level\n\n");
 	printf("    access_time = %d\n", cache.l2->access_time);
 	printf("    tag_mask = %0x\n", cache.l2->tag_mask);
