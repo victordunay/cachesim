@@ -113,14 +113,78 @@ class CacheLevel
 {
 public:
     Way * ways;
-    CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned num_of_sets)
+    unsigned access_time;
+    unsigned tag_mask;
+    unsigned set_mask;
+    unsigned num_of_set_bits;
+    unsigned num_of_tag_bits;
+    unsigned set_offset_in_bits;
+    unsigned tag_offset_in_bits;
+    unsigned num_of_block_bits;
+    unsigned num_of_sets;
+    miss_policy_t miss_policy;
+
+    CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned access_time, miss_policy_t miss_policy, unsigned cache_size_in_bytes)
     {
+        this->miss_policy = miss_policy;
+        this->access_time = access_time;
+        calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
+
+        calculate_num_of_bits(num_of_sets, &num_of_set_bits);
+        calculate_num_of_bits(block_size_in_bytes, &num_of_block_bits);
+        num_of_tag_bits = 32 - num_of_block_bits - num_of_set_bits;
+        set_offset_in_bits = num_of_block_bits;
+        tag_offset_in_bits = num_of_block_bits + num_of_set_bits;
+
+        calculate_mask(num_of_set_bits, &this->set_mask);
+        calculate_mask(num_of_tag_bits, &this->tag_mask);
+
         ways = new Way[num_of_ways];
         for(unsigned way_index = 0; way_index < num_of_ways; way_index++) 
         {
             ways->initialize_way(num_of_sets, block_size_in_bytes);
         }
     }
+
+    void get_tag_from_address(unsigned * tag, uint32_t address)
+    {
+        apply_mask_on_address(address, tag, tag_mask, tag_offset_in_bits);
+    }
+
+    void get_set_from_address(unsigned * set, uint32_t address)
+    {
+        apply_mask_on_address(address, set, set_mask, set_offset_in_bits);
+    }
+
+    void calculate_num_of_sets(unsigned * num_of_sets, unsigned cache_size_in_bytes, unsigned block_size_in_bytes, unsigned num_of_ways)
+    {
+        unsigned num_of_blocks = cache_size_in_bytes / block_size_in_bytes;
+        *num_of_sets = num_of_blocks / num_of_ways;
+    }
+    void apply_mask_on_address(uint32_t address, unsigned * masked_address, unsigned mask, unsigned offset)
+    {
+        *masked_address = (address >> offset) & mask;
+    }
+        
+    void calculate_mask(unsigned num_of_bits, unsigned * mask)
+    {
+       *mask = 0;
+        while(num_of_bits > 0)
+    	{
+    		*mask = *mask << 1 | 1;
+    		num_of_bits -= 1;
+    	}
+    }
+    void calculate_num_of_bits(unsigned value, unsigned * num_of_bits)
+    {
+        *num_of_bits = 1;
+        while(value > 2)
+        {
+            *num_of_bits += 1;
+            value >>= 1;
+        }
+    }
+
     ~CacheLevel() {};
 };
 
@@ -129,248 +193,12 @@ class Cache
 public:
     CacheLevel * l1;
     CacheLevel * l2;
-
+    
     Cache(cache_t cache_parameters)
     {
-        l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_sets);
-        l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_sets);
-    }
+        l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.miss_policy, cache_parameters.l1_size_in_bytes);
+        l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.miss_policy, cache_parameters.l2_size_in_bytes);
+    }   
+
     ~Cache() {};
 };
-
-
-
-
-
-// return_code_t cache_struct_allocation(cache_t ** cache);
-// return_code_t assign_cache_parameters(cache_t ** cache, cache_t cache_parameters);
-// return_code_t cache_memory_allocation(char *** cache, unsigned num_of_ways, unsigned cache_size_in_bytes);
-// return_code_t cache_tags_allocation(unsigned *** cache_tags, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes);
-// return_code_t cache_set_status_allocation(set_status_t *** cache_set_status, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes);
-// void initialize_cache_memory(char *** cache, unsigned num_of_ways, unsigned cache_size_in_bytes);
-// void initialize_cache_tags(unsigned *** cache_tags, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes);
-// void initialize_cache_set_status(set_status_t *** cache_set_status, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes);
-// void apply_mask_on_address(uint32_t address, unsigned * masked_address, unsigned mask, unsigned offset);
-// void calculate_mask(unsigned num_of_bits, unsigned * mask);
-// void calculate_num_of_tag_bits(unsigned num_of_set_bits, unsigned num_of_offset_bits, unsigned * num_of_tag_bits);
-// void calculate_num_of_set_bits(unsigned num_of_sets, unsigned * num_of_set_bits);
-// void calculate_num_of_sets(unsigned * num_of_sets, unsigned cache_size_in_bytes, unsigned block_size_in_bytes, unsigned num_of_ways);
-// void calculate_mask(unsigned num_of_bits, unsigned * mask);
-
-// return_code_t cache_memory_allocation(char *** cache, unsigned num_of_ways, unsigned cache_size_in_bytes)
-// {
-//   	return_code_t return_code = UNINITIALIZED;
-
-// 	unsigned way_index = 0;
-//     unsigned way_size_in_bytes = cache_size_in_bytes / num_of_ways;
-
-//     *cache = (char **) malloc(num_of_ways * sizeof(char *));
-//     CHECK_NULL(*cache);
-
-//     for (way_index = 0; way_index < num_of_ways; ++way_index)
-//     {
-//         (*cache)[way_index] = (char *) malloc(way_size_in_bytes * sizeof(char));
-//         CHECK_NULL((*cache)[way_index]);
-// 	}
-
-// 	return_code = SUCCESS;
-
-// cleanup:
-
-// 	if (SUCCESS != return_code)
-// 	{
-// 		for (way_index = 0; way_index < num_of_ways; ++way_index)
-// 		{
-// 			FREE_PTR((*cache)[way_index]);
-// 		}
-// 		FREE_PTR(*cache);
-// 	}
-	
-// 	return return_code;
-// }
-
-// return_code_t cache_struct_allocation(cache_t ** cache)
-// {
-//     return_code_t return_code = UNINITIALIZED;
-
-// 	*cache = (cache_t *) malloc(sizeof(cache_t));
-
-// 	CHECK_NULL(*cache);
-
-//     return_code = SUCCESS;
-
-// cleanup:
-// 	if (SUCCESS != return_code)
-// 	{
-// 		FREE_PTR(cache);
-// 	}
-	
-// 	return return_code;
-// }
-
-// return_code_t assign_cache_parameters(cache_t ** cache, cache_t cache_parameters)
-// {
-// 	return_code_t return_code = UNINITIALIZED;
-
-//     **cache = cache_parameters;
-
-
-//     return_code = SUCCESS;
-
-// cleanup:
-
-// 	return return_code;
-// }
-
-// void initialize_cache_set_status(set_status_t *** cache_set_status, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes)
-// {
-//    	unsigned way_index = 0;
-//     unsigned set_index = 0;
-//     unsigned num_of_blocks = cache_size_in_bytes / block_size_in_bytes;
-//     unsigned num_of_sets = num_of_blocks / num_of_ways;
-    
-//     for(way_index = 0; way_index < num_of_ways; ++way_index)
-//     {
-//         for (set_index = 0 ; set_index < num_of_sets; ++set_index)
-//         {
-//             (*cache_set_status)[way_index][set_index] = EMPTY;
-//         }
-//     }
-// }
-
-// void initialize_cache_tags(unsigned *** cache_tags, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes)
-// {
-//    	unsigned way_index = 0;
-//     unsigned set_index = 0;
-//     unsigned num_of_blocks = cache_size_in_bytes / block_size_in_bytes;
-//     unsigned num_of_sets = num_of_blocks / num_of_ways;
-    
-//     for(way_index = 0; way_index < num_of_ways; ++way_index)
-//     {
-//         for (set_index = 0 ; set_index < num_of_sets; ++set_index)
-//         {
-//             (*cache_tags)[way_index][set_index] = 0;
-//         }
-//     }
-// }
-
-
-// void initialize_cache_memory(char *** cache, unsigned num_of_ways, unsigned cache_size_in_bytes)
-// {
-//     unsigned way_size_in_bytes = cache_size_in_bytes / num_of_ways;
-// 	unsigned way_index = 0;
-//     unsigned offset_in_way = 0;
-    
-//     for(way_index = 0; way_index < num_of_ways; ++way_index)
-//     {
-//         for (offset_in_way = 0 ; offset_in_way < way_size_in_bytes; ++offset_in_way)
-//         {
-//             (*cache)[way_index][offset_in_way] = 0;
-//         }
-//     }
-// }
-
-// return_code_t cache_set_status_allocation(set_status_t *** cache_set_status, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes)
-// {
-//   	return_code_t return_code = UNINITIALIZED;
-
-// 	unsigned way_index = 0;
-//     unsigned num_of_sets = 0;
-//     (void)calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
-
-
-//     *cache_set_status = (set_status_t **) malloc(num_of_ways * sizeof(set_status_t *));
-//     CHECK_NULL(*cache_set_status);
-
-//     for (way_index = 0; way_index < num_of_ways; ++way_index)
-//     {
-//         (*cache_set_status)[way_index] = (set_status_t *) malloc(num_of_sets * sizeof(set_status_t));
-//         CHECK_NULL((*cache_set_status)[way_index]);
-// 	}
-
-// 	return_code = SUCCESS;
-
-// cleanup:
-
-// 	if (SUCCESS != return_code)
-// 	{
-// 		for (way_index = 0; way_index < num_of_ways; ++way_index)
-// 		{
-// 			FREE_PTR((*cache_set_status)[way_index]);
-// 		}
-// 		FREE_PTR(*cache_set_status);
-// 	}
-	
-// 	return return_code;
-// }
-
-// return_code_t cache_tags_allocation(unsigned *** cache_tags, unsigned num_of_ways, unsigned block_size_in_bytes, unsigned cache_size_in_bytes)
-// {
-//   	return_code_t return_code = UNINITIALIZED;
-
-// 	unsigned way_index = 0;
-//     unsigned num_of_sets = 0;
-//     (void)calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
-
-//     *cache_tags = (unsigned **) malloc(num_of_ways * sizeof(unsigned *));
-//     CHECK_NULL(*cache_tags);
-
-//     for (way_index = 0; way_index < num_of_ways; ++way_index)
-//     {
-//         (*cache_tags)[way_index] = (unsigned *) malloc(num_of_sets * sizeof(unsigned));
-//         CHECK_NULL((*cache_tags)[way_index]);
-// 	}
-
-// 	return_code = SUCCESS;
-
-// cleanup:
-
-// 	if (SUCCESS != return_code)
-// 	{
-// 		for (way_index = 0; way_index < num_of_ways; ++way_index)
-// 		{
-// 			FREE_PTR((*cache_tags)[way_index]);
-// 		}
-// 		FREE_PTR(*cache_tags);
-// 	}
-	
-// 	return return_code;
-// }
-
-// void apply_mask_on_address(uint32_t address, unsigned * masked_address, unsigned mask, unsigned offset)
-// {
-//     *masked_address = (address >> offset) & mask;
-// }
-
-// void calculate_mask(unsigned num_of_bits, unsigned * mask)
-// {
-//    *mask = 0;
-//     while(num_of_bits > 0)
-// 	{
-// 		*mask = *mask << 1 | 1;
-// 		num_of_bits -= 1;
-// 	}
-// }
-
-void calculate_num_of_sets(unsigned * num_of_sets, unsigned cache_size_in_bytes, unsigned block_size_in_bytes, unsigned num_of_ways)
-{
-    unsigned num_of_blocks = cache_size_in_bytes / block_size_in_bytes;
-    *num_of_sets = num_of_blocks / num_of_ways;
-}
-
-// void calculate_num_of_set_bits(unsigned num_of_sets, unsigned * num_of_set_bits)
-// {
-//     *num_of_set_bits = 0;
-//     while(num_of_sets > 1)
-// 	{
-// 		*num_of_set_bits += 1;
-// 		num_of_sets >>= 1;
-// 	}
-// }
-
-// void calculate_num_of_tag_bits(unsigned num_of_set_bits, unsigned num_of_offset_bits, unsigned * num_of_tag_bits)
-// {
-//     *num_of_tag_bits = BYTE_SIZE * sizeof(uint32_t) - num_of_set_bits - num_of_offset_bits;
-
-// }
-// 
