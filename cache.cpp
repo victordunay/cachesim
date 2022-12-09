@@ -55,6 +55,11 @@ typedef struct
 {
     char * block;
     unsigned tag;
+//    there is allways valid, and allways LRU. NO dirty bit when write-through 
+    bool valid;
+    bool dirty;
+    bool LRU;
+
     status_t status;
 } set_t;
 
@@ -265,7 +270,7 @@ public:
         l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.miss_policy, cache_parameters.l2_size_in_bytes);
     }   
 
-    return_code_t operateion_handler(operation_t operation, uint32_t address, int * value)
+    return_code_t operation_handler(operation_t operation, uint32_t address, int * value)
     {
         return_code_t return_code = UNINITIALIZED;
         result_t result = MISS;
