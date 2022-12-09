@@ -58,7 +58,7 @@ typedef struct
 //    there is allways valid, and allways LRU. NO dirty bit when write-through 
     bool valid;
     bool dirty;
-    bool LRU;
+    int LRU;
 
     status_t status;
 } set_t;
