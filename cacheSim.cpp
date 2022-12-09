@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	unsigned l2_num_of_set_bits = 0;
 	unsigned l1_num_of_tag_bits = 0;
 	unsigned l2_num_of_tag_bits = 0;
-
+	uint32_t trace_address = 0;
 	memset(&cache_parameters, 0, sizeof(cache_t));
 
 	if (argc < 19) {
@@ -134,12 +134,14 @@ int main(int argc, char **argv)
 
 		// DEBUG - remove this line
 		cout << ", address (hex)" << cutAddress;
+		trace_address = (uint32_t)strtoul(cutAddress.c_str(), NULL, 16);
 
 		unsigned long int num = 0;
 		num = strtoul(cutAddress.c_str(), NULL, 16);
 
 		// DEBUG - remove this line
 		cout << " (dec) " << num << endl;
+		(void)cache.operation_handler((operation_t)operation, trace_address, (int *)&num);
 
 	}
 
