@@ -110,7 +110,7 @@ class Way
 {
 public:
     set_t * sets;
-
+    unsigned lru_index;
     Way() {};
 
     void initialize_way(unsigned num_of_sets, unsigned block_size_in_bytes)
@@ -119,7 +119,10 @@ public:
         sets->block = new char[block_size_in_bytes];
         memset(sets, 0, sizeof(set_t));
     }
-
+    void initialize_lru_index(unsigned lru_index)
+    {
+        this->lru_index = lru_index;
+    }
     void get_tag_from_set(unsigned set_index, unsigned * tag)
     {
         *tag = sets[set_index].tag;
@@ -153,11 +156,9 @@ public:
     unsigned num_of_block_bits;
     unsigned num_of_sets;
     unsigned num_of_ways;
-    miss_policy_t miss_policy;
 
-    CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned access_time, miss_policy_t miss_policy, unsigned cache_size_in_bytes)
+    CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned access_time, unsigned cache_size_in_bytes)
     {
-        this->miss_policy = miss_policy;
         this->access_time = access_time;
         this->num_of_ways = num_of_ways;
         calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
@@ -176,6 +177,7 @@ public:
         for(unsigned way_index = 0; way_index < num_of_ways; way_index++) 
         {
             ways->initialize_way(num_of_sets, block_size_in_bytes);
+            ways->initialize_lru_index(way_index);
         }
     }
 
@@ -225,7 +227,7 @@ public:
         }
     }
     
-    void search_address_in_cache(uint32_t address, int * value, result_t * result)
+    void search_address_in_cache(uint32_t address, int * value, result_t * result, char ** block)
     {
         unsigned required_tag = 0;
         unsigned cache_tag = 0;
@@ -245,6 +247,7 @@ public:
             if (cache_tag == required_tag & !ways[way_index].is_empty_set(set_index))
             {
                 *value = ways[way_index].get_value_from_cache(set_index, offset_in_block);
+                *block = ways[way_index].sets[set_index].block;
                 *result = HIT; 
             }
         }
@@ -258,25 +261,27 @@ class Cache
 public:
     CacheLevel * l1;
     CacheLevel * l2;
-    
+    unsigned l1_ways;
+    unsigned l2_ways;
+    unsigned block_size_in_bytes;
+    miss_policy_t miss_policy;
+
     Cache(cache_t cache_parameters)
     {
-        l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.miss_policy, cache_parameters.l1_size_in_bytes);
-        l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.miss_policy, cache_parameters.l2_size_in_bytes);
+        this->block_size_in_bytes = cache_parameters.block_size_in_bytes;
+        this->l1_ways = cache_parameters.l1_ways;
+        this->miss_policy = cache_parameters.miss_policy;
+        l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.l1_size_in_bytes);
+        l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.l2_size_in_bytes);
     }   
 
     return_code_t operateion_handler(operation_t operation, uint32_t address, int * value)
     {
         return_code_t return_code = UNINITIALIZED;
-        result_t result = MISS;
 
         if (READ == operation)
         {
-            read_handler(address, value, &result);
-            if (MISS == result)
-            {
-                // get value from main memory
-            }
+            read_handler(address, value);
         }
         else
         {
@@ -287,19 +292,70 @@ public:
         return return_code;
     }
     
-    void read_handler(uint32_t address, int * value, result_t * result)
+    void read_handler(uint32_t address, int * value)
     {
+        char * block_source_for_copy = NULL;
+        char * block_dest_for_copy = NULL;
+        result_t result = MISS;
 
-        (void)l1->search_address_in_cache(address, value, result);
-
-        if (MISS == *result)
+        (void)l1->search_address_in_cache(address, value, &result, &block_source_for_copy);
+        if (HIT == result)
         {
-            (void)l2->search_address_in_cache(address, value, result);
+            return;
+        }
+        else
+        {
+            (void)l2->search_address_in_cache(address, value, &result, &block_source_for_copy);
+            if (HIT == result)
+            {
+                if (WRITE_ALLOCATE == miss_policy)
+                {           
+                    free_block_from_lru_way(l1, address, &block_dest_for_copy);
+                    copy_block(block_source_for_copy, block_dest_for_copy);
+                }
+            }
+            else
+            {
+                if (WRITE_ALLOCATE == miss_policy)
+                {                    
+                    free_block_from_lru_way(l2, address, &block_dest_for_copy);
+                    block_source_for_copy = (char *)&address;
+                    copy_block(block_source_for_copy, block_dest_for_copy);
+
+                    free_block_from_lru_way(l1, address, &block_dest_for_copy);
+                    copy_block(block_source_for_copy, block_dest_for_copy);
+                }
+            }
         }
     }
+
+    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, char ** block_dest_for_copy)
+    {
+        unsigned lru_way = 0;
+        unsigned way_index = 0;
+        unsigned set_index = 0;
+        for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
+        {
+            if (lru_way < cache_level->ways[way_index].lru_index)
+            {
+                lru_way = way_index;
+            }
+        }
+        (void)l1->get_set_from_address(&set_index, address);
+
+        *block_dest_for_copy = cache_level->ways[lru_way].sets[set_index].block;
+        memset(*block_dest_for_copy, 0, block_size_in_bytes);
+    }
+
+
     void write_handler(uint32_t address, int value)
     {
 
+    }
+    
+    void copy_block(char * source, char * dest)
+    {
+        memcpy(dest, source, block_size_in_bytes);
     }
     ~Cache() {};
 };
