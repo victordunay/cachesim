@@ -104,7 +104,6 @@ int main(int argc, char **argv)
 	printf("    tag_offset_in_bits = %d\n", cache.l1->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l1->num_of_block_bits);
 	printf("    num_of_sets = %d\n", cache.l1->num_of_sets);
-	printf("    miss_policy = %d\n\n", cache.l1->miss_policy);
 	printf("L2 level\n\n");
 	printf("    access_time = %d\n", cache.l2->access_time);
 	printf("    tag_mask = %0x\n", cache.l2->tag_mask);
@@ -115,7 +114,6 @@ int main(int argc, char **argv)
 	printf("    tag_offset_in_bits = %d\n", cache.l2->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l2->num_of_block_bits);
 	printf("    num_of_sets = %d\n", cache.l2->num_of_sets);
-	printf("    miss_policy = %d\n", cache.l2->miss_policy);
 
 
 	while (getline(file, line)) {
