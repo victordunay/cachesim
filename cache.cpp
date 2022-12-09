@@ -297,11 +297,23 @@ public:
     unsigned block_size_in_bytes;
     miss_policy_t miss_policy;
 
+
+    void calculate_block_address_mask(unsigned block_size_in_bytes, unsigned * block_address_mask)
+    {
+        *block_address_mask = 0xFFFFFFFF;
+        while(block_size_in_bytes > 1)
+        {
+            *block_address_mask <<= 1;
+            block_size_in_bytes >>= 1;
+        }
+    }
     Cache(cache_t cache_parameters)
     {
         this->block_size_in_bytes = cache_parameters.block_size_in_bytes;
         this->l1_ways = cache_parameters.l1_ways;
         this->miss_policy = cache_parameters.miss_policy;
+        calculate_block_address_mask(block_size_in_bytes, block_address_mask);
+
         l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.l1_size_in_bytes);
         l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.l2_size_in_bytes);
     }   
@@ -363,7 +375,7 @@ public:
                         block_dest_for_update = (char *)&evacuated_address;
                         copy_block(block_dest_for_copy, block_dest_for_update);
                     }
-                    block_source_for_copy = (char *)&address;
+                    block_source_for_copy = (char *)&(address & block_address_mask) ;
 
                     copy_block(block_source_for_copy, block_dest_for_copy);
 
