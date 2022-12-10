@@ -166,11 +166,14 @@ public:
     unsigned num_of_block_bits;
     unsigned num_of_sets;
     unsigned num_of_ways;
+    uint32_t block_address_mask;
 
     CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned access_time, unsigned cache_size_in_bytes)
     {
         this->access_time = access_time;
         this->num_of_ways = num_of_ways;
+        calculate_block_address_mask(block_size_in_bytes, &block_address_mask);
+
         calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
 
         calculate_num_of_bits(num_of_sets, &num_of_set_bits);
@@ -237,6 +240,15 @@ public:
         }
     }
     
+    void calculate_block_address_mask(unsigned block_size_in_bytes, uint32_t * block_address_mask)
+    {
+        *block_address_mask = 0xFFFFFFFF;
+        while(block_size_in_bytes > 1)
+        {
+            *block_address_mask <<= 1;
+            block_size_in_bytes >>= 1;
+        }
+    }
     void search_address_in_cache(uint32_t address, int * value, result_t * result, char ** block)
     {
         unsigned required_tag = 0;
@@ -298,21 +310,12 @@ public:
     miss_policy_t miss_policy;
 
 
-    void calculate_block_address_mask(unsigned block_size_in_bytes, unsigned * block_address_mask)
-    {
-        *block_address_mask = 0xFFFFFFFF;
-        while(block_size_in_bytes > 1)
-        {
-            *block_address_mask <<= 1;
-            block_size_in_bytes >>= 1;
-        }
-    }
+
     Cache(cache_t cache_parameters)
     {
         this->block_size_in_bytes = cache_parameters.block_size_in_bytes;
         this->l1_ways = cache_parameters.l1_ways;
         this->miss_policy = cache_parameters.miss_policy;
-        calculate_block_address_mask(block_size_in_bytes, block_address_mask);
 
         l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.l1_size_in_bytes);
         l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.l2_size_in_bytes);
@@ -375,8 +378,8 @@ public:
                         block_dest_for_update = (char *)&evacuated_address;
                         copy_block(block_dest_for_copy, block_dest_for_update);
                     }
-                    block_source_for_copy = (char *)&(address & block_address_mask) ;
-
+                    address = address & l2->block_address_mask;
+                    block_source_for_copy = (char *)&address;
                     copy_block(block_source_for_copy, block_dest_for_copy);
 
                     free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
@@ -397,6 +400,7 @@ public:
         unsigned way_index = 0;
         unsigned set_index = 0;
         unsigned tag = 0;
+        *evacuated_address = 0;
         for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
         {
             if (lru_way < cache_level->ways[way_index].lru_index)
@@ -409,7 +413,7 @@ public:
         *block_dest_for_copy = cache_level->ways[lru_way].sets[set_index].block;
         *is_dirty = cache_level->ways[lru_way].is_dirty(set_index);
         tag = cache_level->ways[lru_way].sets[set_index].tag;
-        *evacuated_address = (set_index << cache_level->num_of_block_bits) | (tag << (cache_level->num_of_block_bits + cache_level->calculate_num_of_sets)); 
+        *evacuated_address = (set_index << cache_level->num_of_block_bits) | (tag << (cache_level->num_of_block_bits + cache_level->num_of_set_bits)); 
     }
 
 
