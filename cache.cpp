@@ -116,7 +116,13 @@ public:
         sets = new set_t[num_of_sets];
         sets->block = new char[block_size_in_bytes];
         memset(sets, 0, sizeof(set_t));
+    }/*
+    // function for updating the lru after each entry
+        void update_lru_index(unsigned lru_index)
+    {
+        this->lru_index = num_of_ways;
     }
+*/
     void initialize_lru_index(unsigned lru_index)
     {
         this->lru_index = lru_index;

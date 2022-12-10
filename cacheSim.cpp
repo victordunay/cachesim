@@ -96,6 +96,8 @@ int main(int argc, char **argv)
 	printf("===== CACHE INITIALIZATION PARAMETERS VALIDATION ====\n");
 	printf("L1 level\n\n");
 	printf("    access_time = %d\n", cache.l1->access_time);
+	printf("    number_of_ways = %d\n", cache.l1->num_of_ways);
+	printf("    lru_index = %d\n", cache.l1->ways->lru_index);
 	printf("    tag_mask = %0x\n", cache.l1->tag_mask);
 	printf("    set_mask = %0x\n", cache.l1->set_mask);
 	printf("    num_of_set_bits  = %d\n", cache.l1->num_of_set_bits);
@@ -103,9 +105,11 @@ int main(int argc, char **argv)
 	printf("    set_offset_in_bits = %d\n", cache.l1->set_offset_in_bits);
 	printf("    tag_offset_in_bits = %d\n", cache.l1->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l1->num_of_block_bits);
-	printf("    num_of_sets = %d\n", cache.l1->num_of_sets);
+	printf("    num_of_sets = %d\n\n", cache.l1->num_of_sets);
 	printf("L2 level\n\n");
 	printf("    access_time = %d\n", cache.l2->access_time);
+	printf("    number_of_ways = %d\n", cache.l2->num_of_ways);
+	printf("    lru_index = %d\n", cache.l2->ways->lru_index);
 	printf("    tag_mask = %0x\n", cache.l2->tag_mask);
 	printf("    set_mask = %0x\n", cache.l2->set_mask);
 	printf("    num_of_set_bits  = %d\n", cache.l2->num_of_set_bits);
@@ -113,7 +117,7 @@ int main(int argc, char **argv)
 	printf("    set_offset_in_bits = %d\n", cache.l2->set_offset_in_bits);
 	printf("    tag_offset_in_bits = %d\n", cache.l2->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l2->num_of_block_bits);
-	printf("    num_of_sets = %d\n", cache.l2->num_of_sets);
+	printf("    num_of_sets = %d\n\n", cache.l2->num_of_sets);
 
 
 	while (getline(file, line)) {
