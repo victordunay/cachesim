@@ -103,12 +103,7 @@ typedef struct
 }
 cache_t;
 
-
-typedef enum 
-{
-    READ = 0,
-    WRITE = 1,
-}operation_t;
+typedef char operation_t;
 
 
 class Way 
@@ -324,14 +319,13 @@ public:
     return_code_t operation_handler(operation_t operation, uint32_t address, int * value)
     {
         return_code_t return_code = UNINITIALIZED;
-
-        if (READ == operation)
-        {
+        if ('r' == operation)
+        {   
             read_handler(address, value);
         }
         else
         {
-            write_handler(address, *value);
+           write_handler(address, *value);
         }
         return_code = SUCCESS;
 
