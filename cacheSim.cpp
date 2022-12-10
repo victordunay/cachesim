@@ -105,7 +105,8 @@ int main(int argc, char **argv)
 	printf("    set_offset_in_bits = %d\n", cache.l1->set_offset_in_bits);
 	printf("    tag_offset_in_bits = %d\n", cache.l1->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l1->num_of_block_bits);
-	printf("    num_of_sets = %d\n\n", cache.l1->num_of_sets);
+	printf("    num_of_sets = %d\n", cache.l1->num_of_sets);
+	printf("    num_of_ways = %d\n", cache.l1->num_of_ways);
 	printf("L2 level\n\n");
 	printf("    access_time = %d\n", cache.l2->access_time);
 	printf("    number_of_ways = %d\n", cache.l2->num_of_ways);
@@ -117,7 +118,8 @@ int main(int argc, char **argv)
 	printf("    set_offset_in_bits = %d\n", cache.l2->set_offset_in_bits);
 	printf("    tag_offset_in_bits = %d\n", cache.l2->tag_offset_in_bits);
 	printf("    num_of_block_bits = %d\n", cache.l2->num_of_block_bits);
-	printf("    num_of_sets = %d\n\n", cache.l2->num_of_sets);
+	printf("    num_of_sets = %d\n", cache.l2->num_of_sets);
+	printf("    num_of_ways = %d\n", cache.l2->num_of_ways);
 
 
 	while (getline(file, line)) {
@@ -145,9 +147,11 @@ int main(int argc, char **argv)
 
 		// DEBUG - remove this line
 		cout << " (dec) " << num << endl;
-		(void)cache.operation_handler((operation_t)operation, trace_address, (int *)&num);
+		(void)cache.operation_handler((operation_t)operation, trace_address);
 
 	}
+	printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
+	printf("L2 misses = %d  L2 access = %d\n", cache.l2->num_of_miss, cache.l2->num_of_access);
 
 	double L1MissRate;
 	double L2MissRate;

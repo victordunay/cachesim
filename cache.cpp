@@ -132,9 +132,9 @@ public:
         *tag = sets[set_index].tag;
     }
     
-    bool is_empty_set(unsigned set_index)
+    bool is_valid_set(unsigned set_index)
     {
-        return !sets[set_index].status;
+        return sets[set_index].valid;
     }
     
     int get_value_from_cache(unsigned set_index, unsigned offset_in_block)
@@ -166,11 +166,15 @@ public:
     unsigned num_of_sets;
     unsigned num_of_ways;
     uint32_t block_address_mask;
+    unsigned num_of_miss;
+    unsigned num_of_access;
 
     CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned access_time, unsigned cache_size_in_bytes)
     {
         this->access_time = access_time;
         this->num_of_ways = num_of_ways;
+        this->num_of_miss = 0;
+        this->num_of_access = 0;
         calculate_block_address_mask(block_size_in_bytes, &block_address_mask);
 
         calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
@@ -188,8 +192,8 @@ public:
         ways = new Way[num_of_ways];
         for(unsigned way_index = 0; way_index < num_of_ways; way_index++) 
         {
-            ways->initialize_way(num_of_sets, block_size_in_bytes);
-            ways->initialize_lru_index(way_index);
+            ways[way_index].initialize_way(num_of_sets, block_size_in_bytes);
+            ways[way_index].initialize_lru_index(way_index);
         }
     }
 
@@ -231,8 +235,8 @@ public:
 
     void calculate_num_of_bits(unsigned value, unsigned * num_of_bits)
     {
-        *num_of_bits = 1;
-        while(value > 2)
+        *num_of_bits = 0;
+        while(value > 1)
         {
             *num_of_bits += 1;
             value >>= 1;
@@ -248,52 +252,51 @@ public:
             block_size_in_bytes >>= 1;
         }
     }
-    void search_address_in_cache(uint32_t address, int * value, result_t * result, char ** block)
+    void search_address_in_cache(uint32_t address, result_t * result, set_t ** set)
     {
         unsigned required_tag = 0;
         unsigned cache_tag = 0;
         unsigned set_index = 0;
         unsigned way_index = 0;
         unsigned offset_in_block = 0;
-        *value = 0;
         *result = MISS;
-
+        num_of_access = num_of_access + 1;
         (void)get_tag_from_address(&required_tag, address);
         (void)get_set_from_address(&set_index, address);
-        (void)get_block_offset_from_address(&offset_in_block, address);
-
+        (void)get_block_offset_from_address(&offset_in_block, address); // unused?
         for (way_index = 0; way_index < num_of_ways; ++way_index)
         {
             ways[way_index].get_tag_from_set(set_index, &cache_tag);
-            if (cache_tag == required_tag & !ways[way_index].is_empty_set(set_index))
+            if ((cache_tag == required_tag) & ways[way_index].is_valid_set(set_index))
             {
-                *value = ways[way_index].get_value_from_cache(set_index, offset_in_block);
-                *block = ways[way_index].sets[set_index].block;
-                *result = HIT; 
+                *result = HIT;
+                *set = &ways[way_index].sets[set_index];
+                update_lru_states(way_index);
+                break;               
             }
+        }
+        if (MISS == *result)
+        {
+            this->num_of_miss++;
         }
     }
 
-
-    void search_block_for_update(uint32_t address, char ** block)
+    void update_lru_states(unsigned hit_way_index)
     {
-        unsigned required_tag = 0;
-        unsigned cache_tag = 0;
-        unsigned set_index = 0;
         unsigned way_index = 0;
-
-        (void)get_tag_from_address(&required_tag, address);
-        (void)get_set_from_address(&set_index, address);
-
+        unsigned current_lru_index = ways[hit_way_index].lru_index;
+        
         for (way_index = 0; way_index < num_of_ways; ++way_index)
         {
-            ways[way_index].get_tag_from_set(set_index, &cache_tag);
-            if (cache_tag == required_tag & !ways[way_index].is_empty_set(set_index))
+            if (ways[way_index].lru_index < current_lru_index)
             {
-                *block = ways[way_index].sets[set_index].block;
+                ways[way_index].lru_index++;
             }
         }
+
+        ways[hit_way_index].lru_index = 0;
     }
+
 
     ~CacheLevel() {};
 };
@@ -307,6 +310,7 @@ public:
     unsigned l2_ways;
     unsigned block_size_in_bytes;
     miss_policy_t miss_policy;
+ 
 
 
 
@@ -315,90 +319,113 @@ public:
         this->block_size_in_bytes = cache_parameters.block_size_in_bytes;
         this->l1_ways = cache_parameters.l1_ways;
         this->miss_policy = cache_parameters.miss_policy;
-
+   
         l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.l1_size_in_bytes);
         l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.l2_size_in_bytes);
     }   
 
-    return_code_t operation_handler(operation_t operation, uint32_t address, int * value)
+    return_code_t operation_handler(operation_t operation, uint32_t address)
     {
         return_code_t return_code = UNINITIALIZED;
         if ('r' == operation)
         {   
-            read_handler(address, value);
+            read_handler(address);
         }
         else
         {
-           write_handler(address, *value);
+           write_handler(address);
         }
         return_code = SUCCESS;
 
         return return_code;
     }
     
-    void read_handler(uint32_t address, int * value)
+    void read_handler(uint32_t address)
     {
-        char * block_source_for_copy = NULL;
-        char * block_dest_for_copy = NULL;
-        char * block_dest_for_update = NULL;
         result_t result = MISS;
-        bool is_dirty = false;
-        uint32_t evacuated_address = 0;
+        unsigned assigned_tag = 0;
+        set_t * free_set;
+        set_t * hit_set;
+        
+        (void)l1->search_address_in_cache(address, &result, &hit_set);
 
-        (void)l1->search_address_in_cache(address, value, &result, &block_source_for_copy);
         if (HIT == result)
         {
             return;
         }
         else
         {
-            (void)l2->search_address_in_cache(address, value, &result, &block_source_for_copy);
+            (void)l2->search_address_in_cache(address, &result, &hit_set);
+
             if (HIT == result)
             {
+
                 if (WRITE_ALLOCATE == miss_policy)
                 {           
-                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
-                    if (is_dirty)
+                    free_block_from_lru_way(l1, address, &free_set);
+                    if (free_set->dirty)
                     {
-                        (void)l2->search_block_for_update(evacuated_address, &block_dest_for_update);
-                        copy_block(block_dest_for_copy, block_dest_for_update);
+                        free_set->dirty = 0;
+                        (void)l2->search_address_in_cache(address, &result, &hit_set);
+                        if (HIT == result)
+                        {
+                            hit_set->dirty = 1;
+                        }
+                  
                     }
-                    copy_block(block_source_for_copy, block_dest_for_copy);
+
+                    free_set->valid = 1;
+                    (void)l1->get_tag_from_address(&assigned_tag, address);
+                    free_set->tag = assigned_tag;
+
                 }
             }
             else
             {
-                if (WRITE_ALLOCATE == miss_policy)
-                {                    
-                    free_block_from_lru_way(l2, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
-                    if (is_dirty)
-                    {
-                        block_dest_for_update = (char *)&evacuated_address;
-                        copy_block(block_dest_for_copy, block_dest_for_update);
-                    }
-                    address = address & l2->block_address_mask;
-                    block_source_for_copy = (char *)&address;
-                    copy_block(block_source_for_copy, block_dest_for_copy);
 
-                    free_block_from_lru_way(l1, address, &block_dest_for_copy, &is_dirty, &evacuated_address);
-                    if (is_dirty)
+                if (WRITE_ALLOCATE == miss_policy)
+                {       
+
+                    free_block_from_lru_way(l1, address, &free_set);
+                    if (free_set->dirty)
                     {
-                        (void)l2->search_block_for_update(evacuated_address, &block_dest_for_update);
-                        copy_block(block_dest_for_copy, block_dest_for_update);
+                        free_set->dirty = 0;
+                        (void)l2->search_address_in_cache(address, &result, &hit_set);
+                        if (HIT == result)
+                        {
+                            hit_set->dirty = 1;
+                        }
+    
                     }
-                    copy_block(block_source_for_copy, block_dest_for_copy);
+
+                    free_set->valid = 1;
+                    (void)l1->get_tag_from_address(&assigned_tag, address);
+                    free_set->tag = assigned_tag;
+
+
+                    free_block_from_lru_way(l2, address, &free_set);
+                    
+                    if (free_set->dirty)
+                    {
+                        free_set->dirty = 0;
+                    }
+                   
+                    free_set->valid = 1;
+                    (void)l2->get_tag_from_address(&assigned_tag, address);
+                    free_set->tag = assigned_tag;
+
+
                 }
             }
         }
     }
 
-    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, char ** block_dest_for_copy, bool * is_dirty, uint32_t * evacuated_address)
+    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, set_t ** free_set)
     {
         unsigned lru_way = 0;
         unsigned way_index = 0;
         unsigned set_index = 0;
-        unsigned tag = 0;
-        *evacuated_address = 0;
+
         for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
         {
             if (lru_way < cache_level->ways[way_index].lru_index)
@@ -406,23 +433,34 @@ public:
                 lru_way = way_index;
             }
         }
-        (void)l1->get_set_from_address(&set_index, address);
-
-        *block_dest_for_copy = cache_level->ways[lru_way].sets[set_index].block;
-        *is_dirty = cache_level->ways[lru_way].is_dirty(set_index);
-        tag = cache_level->ways[lru_way].sets[set_index].tag;
-        *evacuated_address = (set_index << cache_level->num_of_block_bits) | (tag << (cache_level->num_of_block_bits + cache_level->num_of_set_bits)); 
+        (void)cache_level->get_set_from_address(&set_index, address);
+        *free_set = &cache_level->ways[lru_way].sets[set_index];
+        cache_level->update_lru_states(lru_way);
     }
 
 
-    void write_handler(uint32_t address, int value)
+    void write_handler(uint32_t address)
     {
+        result_t result = MISS;
+        set_t * hit_set;
+        (void)l1->search_address_in_cache(address, &result, &hit_set);
+
+        if (HIT == result)
+        {
+            hit_set->dirty = 1;
+            return;
+        }
+        else
+        {
+            (void)l2->search_address_in_cache(address, &result, &hit_set);
+
+            if (HIT == result)
+            {
+                hit_set->dirty = 1;
+            }
+        }
 
     }
-    
-    void copy_block(char * source, char * dest)
-    {
-        memcpy(dest, source, block_size_in_bytes);
-    }
+ 
     ~Cache() {};
 };
