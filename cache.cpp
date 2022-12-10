@@ -439,6 +439,54 @@ public:
     }
 
 
+    //*****************************************************************************
+                                //LRU UPDATE
+    //*****************************************************************************
+        //counter for each set and lru indicator for each way
+    	void initialize_lru(CacheLevel * cache_level)
+	{
+        int counter[cache_level->num_of_sets][cache_level->num_of_ways]={};
+		for (int i = 0; i < cache_level->num_of_sets; i++) 
+		{
+			for (int j = 0; j < cache_level->num_of_ways; j++) 
+			{
+				counter[i][j] = j;
+			}
+		}
+	}
+    //the lru is the way with the value 0
+	int need_to_evict(CacheLevel * cache_level, int set_index, int counter) 
+	{
+		for (int i = 0; i < cache_level->num_of_ways ; i++)
+		{
+			if ( counter[set_index][i]==0 )
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+    // function for updating the lru after each entry
+        void update_lru_index(int set_index, unsigned lru_index, CacheLevel * cache_level, int counter)
+    {
+       //lru_index= way_index
+        unsigned tmp = counter[set_index][cache_level->ways->lru_index];
+        counter[set_index][cache_level->ways->lru_index]  = cache_level->num_of_ways -1;
+
+        for (int i = 0; i< cache_level->num_of_ways; i++)
+        {
+            if (   (i != cache_level->ways->lru_index )  &&  (counter[set_index][i] > tmp)  )
+            {
+                counter[set_index][i]--;
+            }
+        }
+    }
+  
+    //**********************************************************************************************
+
+    //**********************************************************************************************
+
     void write_handler(uint32_t address)
     {
         result_t result = MISS;
