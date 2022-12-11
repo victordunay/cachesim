@@ -432,8 +432,6 @@ public:
         *free_set = &cache_level->ways[lru_way].sets[set_index];
         cache_level->update_lru_states(lru_way);
     }
-
-
     void write_handler(uint32_t address)
     {
         result_t result = MISS;

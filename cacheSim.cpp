@@ -153,11 +153,16 @@ int main(int argc, char **argv)
 	printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
 	printf("L2 misses = %d  L2 access = %d\n", cache.l2->num_of_miss, cache.l2->num_of_access);
 
-	double L1MissRate;
-	double L2MissRate;
-	double avgAccTime;
+	double L1Hits=(cache.l1->num_of_access - cache.l1->num_of_miss);
+	double L2Hits=(cache.l2->num_of_access - cache.l2->num_of_miss);
+	double L1MissRate= (cache.l1->num_of_miss)/(1.0*cache.l1->num_of_access);
+	double L2MissRate= (cache.l2->num_of_miss)/(1.0*cache.l2->num_of_access);
 
-	printf("L1miss=%.03f ", L1MissRate);
+	double tot_mem_access= cache.l1->num_of_access +cache.l2->num_of_access + cache.l2->num_of_miss; 
+
+	//double avgAccTime= ((cache.l1->num_of_access* (L1Cyc) )  +  (L1MissRate)*(L2Cyc)  +  (L2MissRate)*(MemCyc)) / tot_mem_access ;
+	double avgAccTime= (( (L1Hits)* (L1Cyc) )  +  (L1MissRate)*(L2Hits)*(L1Cyc+L2Cyc)  +  (L1MissRate)*(L2MissRate)*(L1Cyc+L2Cyc+MemCyc))/* / tot_mem_access */;																			
+	printf("L1miss=%.03f ", L1MissRate);												
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
 
