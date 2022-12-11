@@ -159,7 +159,7 @@ int main(int argc, char **argv)
 	double L2MissRate= (cache.l2->num_of_miss)/(1.0*cache.l2->num_of_access);
 
 	double tot_mem_access= cache.l1->num_of_access +cache.l2->num_of_access + cache.l2->num_of_miss;                            
-	double avgAccTime= ((L1Hits * L1Cyc)  +  ((L1Cyc+L2Cyc))*L2Hits  +  (cache.l2->num_of_miss)*(L1Cyc+L2Cyc+MemCyc)) / tot_mem_access ;
+	double avgAccTime= ((cache.l1->num_of_access)  +  ((L2Cyc))*L1MissRate  +  (cache.l2->num_of_miss)*(MemCyc)) / tot_mem_access ;
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
 	printf("AccTimeAvg=%.03f\n", avgAccTime);
