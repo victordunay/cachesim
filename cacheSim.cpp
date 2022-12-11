@@ -144,7 +144,10 @@ int main(int argc, char **argv)
 		// DEBUG - remove this line
 		cout << " (dec) " << num << endl;
 		(void)cache.operation_handler((operation_t)operation, trace_address);
-
+		// for (unsigned way_index = 0; way_index < cache.l2->num_of_ways; ++way_index)
+        // {
+		// 	printf("lru[%d] = %d   \n", way_index, cache.l2->ways[way_index].lru_index);
+        // }
 		printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
 		printf("L2 misses = %d  L2 access = %d\n", cache.l2->num_of_miss, cache.l2->num_of_access);
 
