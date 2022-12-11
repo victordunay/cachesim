@@ -145,6 +145,9 @@ int main(int argc, char **argv)
 		cout << " (dec) " << num << endl;
 		(void)cache.operation_handler((operation_t)operation, trace_address);
 
+		printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
+		printf("L2 misses = %d  L2 access = %d\n", cache.l2->num_of_miss, cache.l2->num_of_access);
+
 	}
 	printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
 	printf("L2 misses = %d  L2 access = %d\n", cache.l2->num_of_miss, cache.l2->num_of_access);
