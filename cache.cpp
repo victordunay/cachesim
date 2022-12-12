@@ -273,7 +273,7 @@ public:
                 *set = &ways[way_index].sets[set_index];
                 // if (enable_counter)
                 // {
-                    update_lru_states(way_index);
+                update_lru_states(way_index);
                 // }
                 // else
                 // {
@@ -432,7 +432,6 @@ public:
                         }
                         else
                         {
-                            printf("i am here\n");
                             tmp_address = (free_set->tag << (l2->num_of_set_bits + l2->num_of_block_bits) | (tmp_index << l2->num_of_block_bits));
                             printf("tmp address = %x\n", tmp_address);
                             (void)l1->search_address_in_cache(tmp_address, &result, &hit_set, false);
@@ -514,17 +513,31 @@ public:
         unsigned lru_way = 0;
         unsigned way_index = 0;
         unsigned set_index = 0;
-        // printf("INSIDE!!!!!<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<!!\n");
+        bool found_empty = false;
+        (void)cache_level->get_set_from_address(&set_index, address);
+
         for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
         {
-            // printf("lru [%d] = %d\n", way_index, cache_level->ways[way_index].lru_index);
-            if (cache_level->ways[lru_way].lru_index < cache_level->ways[way_index].lru_index)
+            
+            if (0 == cache_level->ways[way_index].sets[set_index].valid)
             {
-                // printf("lru_way [%d] < %d\n", lru_way, cache_level->ways[way_index].lru_index);
-                lru_way = way_index;
+               lru_way = way_index; 
+               found_empty = true;
+               break;
             }
         }
-        (void)cache_level->get_set_from_address(&set_index, address);
+        if (!found_empty)
+        {
+            for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
+            {
+                // printf("lru [%d] = %d\n", way_index, cache_level->ways[way_index].lru_index);
+                if (cache_level->ways[lru_way].lru_index < cache_level->ways[way_index].lru_index)
+                {
+                    lru_way = way_index;
+                }
+            }
+        }
+     
         printf("free way %d free set %d \n", lru_way, set_index);
         *free_set = &cache_level->ways[lru_way].sets[set_index];
         *tmp_set_index = set_index;
@@ -558,9 +571,6 @@ public:
             if (HIT == result)
             {
                 printf("found in L2!\n");
-                hit_set->dirty = 1;
-
-                printf("found in L2!\n");
 
                 if (WRITE_ALLOCATE == miss_policy)
                 {           
@@ -572,10 +582,11 @@ public:
                         {
                             printf("was dirty! should handle that..\n");
                             free_set->dirty = 0;
-                            (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
+                            printf("tmp address = %x\n", tmp_address);
+                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
                             if (HIT == result)
                             {
-                                printf("evacuated block correctly!\n");
                                 hit_set->dirty = 1;
                             }
                             else
@@ -586,6 +597,7 @@ public:
                     }
 
                     free_set->valid = 1;
+                    free_set->dirty = 1;
                     (void)l1->get_tag_from_address(&assigned_tag, address);
                     free_set->tag = assigned_tag;
                     printf("updated L1 set with tag %x\n",assigned_tag);
@@ -598,8 +610,6 @@ public:
 
                 if (WRITE_ALLOCATE == miss_policy)
                 {       
-
-
                      printf("free L2 block.. \n");   
                     // for (unsigned way_index = 0; way_index < l2->num_of_ways; ++way_index)
                     // {
@@ -613,9 +623,8 @@ public:
                             printf("L2 block ????was dirty! should handle that..\n");
                             free_set->dirty = 0;
                         }
-                        else
-                        {
-                            printf("i am here\n");
+                        // else
+                        // {
                             tmp_address = (free_set->tag << (l2->num_of_set_bits + l2->num_of_block_bits) | (tmp_index << l2->num_of_block_bits));
                             printf("tmp address = %x\n", tmp_address);
                             (void)l1->search_address_in_cache(tmp_address, &result, &hit_set, false);
@@ -629,11 +638,11 @@ public:
                             {
                                 printf("L1 wasnt dirty..\n");
                             }
-                        }
+                        // }
                     }
-                
-                   
+            
                     free_set->valid = 1;
+
                     (void)l2->get_tag_from_address(&assigned_tag, address);
                     free_set->tag = assigned_tag;
                     printf("updated L2 set with tag %x\n",assigned_tag);
@@ -648,7 +657,9 @@ public:
                             printf("was dirty! should handle that..\n");
                             free_set->dirty = 0;
                             free_set->valid = 0;
-                            (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
+
+                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
                             if (HIT == result)
                             {
                                 printf("evacuated block correctly!\n");
