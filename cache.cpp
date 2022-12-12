@@ -554,9 +554,10 @@ public:
                 return;
             }
         }
+
         printf("Only in main memory :(\n");
 
     }
- 
+ // need to add write to L1 and L2
     ~Cache() {};
 };
