@@ -271,20 +271,20 @@ public:
             {
                 *result = HIT;
                 *set = &ways[way_index].sets[set_index];
-                if (enable_counter)
-                {
+                // if (enable_counter)
+                // {
                     update_lru_states(way_index);
-                }
-                else
-                {
-                    printf("found dirty! set %d way %d\n", set_index, way_index);
+                // }
+                // else
+                // {
+                    // printf("found dirty! set %d way %d\n", set_index, way_index);
                     // printf("inside!!!!\n");
                     // for (unsigned way_index = 0; way_index < num_of_ways; ++way_index)
                     // {
                     //     printf("lru[%d] = %d   \n", way_index, ways[way_index].lru_index);
                     // }
 
-                }
+                // }
                 break;               
             }
         }
@@ -465,7 +465,9 @@ public:
                             printf("was dirty! should handle that..\n");
                             free_set->dirty = 0;
                             free_set->valid = 0;
-                            (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
+                            printf("tmp address = %x\n", tmp_address);
+                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
                             if (HIT == result)
                             {
                                 printf("evacuated block correctly!\n");
@@ -534,6 +536,12 @@ public:
     {
         result_t result = MISS;
         set_t * hit_set;
+        set_t * free_set;
+        unsigned tmp_index = 0;
+        uint32_t tmp_address = 0;
+        unsigned assigned_tag = 0;
+
+
         printf("inside write handler!\n");
         (void)l1->search_address_in_cache(address, &result, &hit_set, true);
 
@@ -551,10 +559,133 @@ public:
             {
                 printf("found in L2!\n");
                 hit_set->dirty = 1;
-                return;
+
+                printf("found in L2!\n");
+
+                if (WRITE_ALLOCATE == miss_policy)
+                {           
+                    free_block_from_lru_way(l1, address, &free_set, &tmp_index);
+
+                    if(free_set->valid)
+                    {
+                        if (free_set->dirty)
+                        {
+                            printf("was dirty! should handle that..\n");
+                            free_set->dirty = 0;
+                            (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                            if (HIT == result)
+                            {
+                                printf("evacuated block correctly!\n");
+                                hit_set->dirty = 1;
+                            }
+                            else
+                            {
+                                printf("bad evauation@@@@@");
+                            }
+                        }
+                    }
+
+                    free_set->valid = 1;
+                    (void)l1->get_tag_from_address(&assigned_tag, address);
+                    free_set->tag = assigned_tag;
+                    printf("updated L1 set with tag %x\n",assigned_tag);
+
+                }
+            }
+            else
+            {
+                printf("Only in main memory :(\n");
+
+                if (WRITE_ALLOCATE == miss_policy)
+                {       
+
+
+                     printf("free L2 block.. \n");   
+                    // for (unsigned way_index = 0; way_index < l2->num_of_ways; ++way_index)
+                    // {
+                    //     printf("lru[%d] = %d   \n", way_index, l2->ways[way_index].lru_index);
+                    // }
+                    free_block_from_lru_way(l2, address, &free_set, &tmp_index);
+                    if(free_set->valid)
+                    {
+                        if (free_set->dirty)
+                        {
+                            printf("L2 block ????was dirty! should handle that..\n");
+                            free_set->dirty = 0;
+                        }
+                        else
+                        {
+                            printf("i am here\n");
+                            tmp_address = (free_set->tag << (l2->num_of_set_bits + l2->num_of_block_bits) | (tmp_index << l2->num_of_block_bits));
+                            printf("tmp address = %x\n", tmp_address);
+                            (void)l1->search_address_in_cache(tmp_address, &result, &hit_set, false);
+                            if (HIT == result & hit_set->valid) //TODO checkalso of L1 is firty
+                            {
+                                printf("evacuated block correctly!\n");
+                                hit_set->dirty = 0;
+                                hit_set->valid = 0;
+                            }
+                            else
+                            {
+                                printf("L1 wasnt dirty..\n");
+                            }
+                        }
+                    }
+                
+                   
+                    free_set->valid = 1;
+                    (void)l2->get_tag_from_address(&assigned_tag, address);
+                    free_set->tag = assigned_tag;
+                    printf("updated L2 set with tag %x\n",assigned_tag);
+
+
+                    printf("free L1 block...");        
+                    free_block_from_lru_way(l1, address, &free_set, &tmp_index);
+                    if(free_set->valid)
+                    {
+                        if (free_set->dirty)
+                        {
+                            printf("was dirty! should handle that..\n");
+                            free_set->dirty = 0;
+                            free_set->valid = 0;
+                            (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                            if (HIT == result)
+                            {
+                                printf("evacuated block correctly!\n");
+                                hit_set->dirty = 1;
+                            }
+                            else
+                            {
+                                printf("bad evauation@@@@@");
+                            }
+                        }
+                        else
+                        {
+                            /*
+                            printf("evacuate L2 because of L1\n");
+                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
+                            printf("tmp address = %x\n", tmp_address);
+                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
+                            if (HIT == result & hit_set->valid )
+                            {
+                                printf("evacuated block correctly!\n");
+                                hit_set->dirty = 0;
+                                hit_set->valid = 0;
+                            }*/
+                        }
+                    }
+                    free_set->valid = 1;
+                    (void)l1->get_tag_from_address(&assigned_tag, address);
+                    free_set->tag = assigned_tag;
+                    free_set->dirty = 1;
+                    printf("updated L1 set with tag %x\n",assigned_tag);
+                }
+
+
+
+
             }
         }
-        printf("Only in main memory :(\n");
 
     }
  
