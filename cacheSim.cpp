@@ -83,7 +83,7 @@ int main(int argc, char **argv)
     cache_parameters.l2_size_in_bytes = SHIFT_LEFT(L2Size);
 	cache_parameters.memory_access_time = MemCyc;
     cache_parameters.l1_access_time = L1Cyc;
-	cache_parameters.l2_access_time = L2Cyc;
+	cache_parameters.l2_access_time = L1Cyc;
     cache_parameters.miss_policy = (miss_policy_t)WrAlloc;
 	cache_parameters.l1 = NULL;
 	cache_parameters.l1 = NULL;
@@ -93,33 +93,7 @@ int main(int argc, char **argv)
 	cache_parameters.l2_status = NULL;
 
 	Cache cache(cache_parameters);
-	printf("===== CACHE INITIALIZATION PARAMETERS VALIDATION ====\n");
-	printf("L1 level\n\n");
-	printf("    access_time = %d\n", cache.l1->access_time);
-	printf("    number_of_ways = %d\n", cache.l1->num_of_ways);
-	printf("    lru_index = %d\n", cache.l1->ways->lru_index);
-	printf("    tag_mask = %0x\n", cache.l1->tag_mask);
-	printf("    set_mask = %0x\n", cache.l1->set_mask);
-	printf("    num_of_set_bits  = %d\n", cache.l1->num_of_set_bits);
-	printf("    num_of_tag_bits = %d\n", cache.l1->num_of_tag_bits);
-	printf("    set_offset_in_bits = %d\n", cache.l1->set_offset_in_bits);
-	printf("    tag_offset_in_bits = %d\n", cache.l1->tag_offset_in_bits);
-	printf("    num_of_block_bits = %d\n", cache.l1->num_of_block_bits);
-	printf("    num_of_sets = %d\n", cache.l1->num_of_sets);
-	printf("    num_of_ways = %d\n", cache.l1->num_of_ways);
-	printf("L2 level\n\n");
-	printf("    access_time = %d\n", cache.l2->access_time);
-	printf("    number_of_ways = %d\n", cache.l2->num_of_ways);
-	printf("    lru_index = %d\n", cache.l2->ways->lru_index);
-	printf("    tag_mask = %0x\n", cache.l2->tag_mask);
-	printf("    set_mask = %0x\n", cache.l2->set_mask);
-	printf("    num_of_set_bits  = %d\n", cache.l2->num_of_set_bits);
-	printf("    num_of_tag_bits = %d\n", cache.l2->num_of_tag_bits);
-	printf("    set_offset_in_bits = %d\n", cache.l2->set_offset_in_bits);
-	printf("    tag_offset_in_bits = %d\n", cache.l2->tag_offset_in_bits);
-	printf("    num_of_block_bits = %d\n", cache.l2->num_of_block_bits);
-	printf("    num_of_sets = %d\n", cache.l2->num_of_sets);
-	printf("    num_of_ways = %d\n", cache.l2->num_of_ways);
+	
 
 
 	while (getline(file, line)) {
@@ -128,36 +102,19 @@ int main(int argc, char **argv)
 		string address;
 		char operation = 0; // read (R) or write (W)
 		if (!(ss >> operation >> address)) {
-			// Operation appears in an Invalid format
-			cout << "Command Format error" << endl;
+	
 			return 0;
 		}
 
-		// DEBUG - remove this line
-		cout << "operation: " << operation;
-
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
-
-		// DEBUG - remove this line
-		cout << ", address (hex)" << cutAddress;
+	
 		trace_address = (uint32_t)strtoul(cutAddress.c_str(), NULL, 16);
 
-		unsigned long int num = 0;
-		num = strtoul(cutAddress.c_str(), NULL, 16);
-
 		// DEBUG - remove this line
-		cout << " (dec) " << num << endl;
+		cout << "" ;
 		(void)cache.operation_handler((operation_t)operation, trace_address);
-		// for (unsigned way_index = 0; way_index < cache.l2->num_of_ways; ++way_index)
-        // {
-		// 	printf("lru[%d] = %d   \n", way_index, cache.l2->ways[way_index].lru_index);
-        // }
-		printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
-		printf("L2 misses = %d  L2 access = %d\n\n", cache.l2->num_of_miss, cache.l2->num_of_access);
-
+	
 	}
-	printf("L1 misses = %d  L1 access = %d\n", cache.l1->num_of_miss, cache.l1->num_of_access);
-	printf("L2 misses = %d  L2 access = %d\n\n", cache.l2->num_of_miss, cache.l2->num_of_access);
 
 	double L1Hits=(cache.l1->num_of_access - cache.l1->num_of_miss);
 	double L2Hits=(cache.l2->num_of_access - cache.l2->num_of_miss);
