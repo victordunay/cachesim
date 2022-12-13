@@ -61,6 +61,7 @@ typedef struct
 
     status_t status;
     bool dirty;
+    unsigned lru_index;
 } set_t;
 
 typedef enum
@@ -111,6 +112,7 @@ class Way
 public:
     set_t * sets;
     unsigned lru_index;
+    unsigned num_of_sets;
     Way() {};
 
     void initialize_way(unsigned num_of_sets, unsigned block_size_in_bytes)
@@ -118,9 +120,15 @@ public:
         sets = new set_t[num_of_sets];
         sets->block = new char[block_size_in_bytes];
         memset(sets, 0, sizeof(set_t));
+        this->num_of_sets = num_of_sets;
     }
     void initialize_lru_index(unsigned lru_index)
     {
+        unsigned set_index = 0;
+        for(set_index = 0; set_index < num_of_sets; ++set_index)
+        {
+            sets[set_index].lru_index = lru_index;
+        }
         this->lru_index = lru_index;
     }
     void get_tag_from_set(unsigned set_index, unsigned * tag)
@@ -273,7 +281,7 @@ public:
                 *set = &ways[way_index].sets[set_index];
                 // if (enable_counter)
                 // {
-                update_lru_states(way_index);
+                update_lru_states(way_index, set_index);
                 // }
                 // else
                 // {
@@ -294,20 +302,20 @@ public:
         }
     }
 
-    void update_lru_states(unsigned hit_way_index)
+    void update_lru_states(unsigned hit_way_index, unsigned set_index)
     {
         unsigned way_index = 0;
-        unsigned current_lru_index = ways[hit_way_index].lru_index;
+        unsigned current_lru_index = ways[hit_way_index].sets[set_index].lru_index;
         
         for (way_index = 0; way_index < num_of_ways; ++way_index)
         {
-            if (ways[way_index].lru_index < current_lru_index)
+            if (ways[way_index].sets[set_index].lru_index < current_lru_index)
             {
-                ways[way_index].lru_index++;
+                ways[way_index].sets[set_index].lru_index++;
             }
         }
 
-        ways[hit_way_index].lru_index = 0;
+        ways[hit_way_index].sets[set_index].lru_index = 0;
     }
 
 
@@ -531,7 +539,7 @@ public:
             for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
             {
                 // printf("lru [%d] = %d\n", way_index, cache_level->ways[way_index].lru_index);
-                if (cache_level->ways[lru_way].lru_index < cache_level->ways[way_index].lru_index)
+                if (cache_level->ways[lru_way].sets[set_index].lru_index < cache_level->ways[way_index].sets[set_index].lru_index)
                 {
                     lru_way = way_index;
                 }
@@ -541,7 +549,7 @@ public:
         printf("free way %d free set %d \n", lru_way, set_index);
         *free_set = &cache_level->ways[lru_way].sets[set_index];
         *tmp_set_index = set_index;
-        cache_level->update_lru_states(lru_way);
+        cache_level->update_lru_states(lru_way, set_index);
     }
 
 
