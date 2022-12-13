@@ -245,6 +245,20 @@ public:
         }
     }
     
+    void find_empty_set_in_cache(unsigned set_index, unsigned * way_index_for_new_block, bool * found_empty_set)
+    {
+        unsigned way_index = 0;
+
+        for (way_index = 0; way_index < num_of_ways; ++way_index)
+        {
+            if (0 == ways[way_index].sets[set_index].valid)
+            {
+               *way_index_for_new_block = way_index; 
+               *found_empty_set = true;
+               break;
+            }
+        }
+    }
     void calculate_block_address_mask(unsigned block_size_in_bytes, uint32_t * block_address_mask)
     {
         *block_address_mask = 0xFFFFFFFF;
@@ -289,6 +303,21 @@ public:
         }
     }
 
+
+    void get_lru_way_index(unsigned set_index, unsigned * way_index_for_new_block)
+    {
+        unsigned way_index = 0;
+        *way_index_for_new_block = 0;
+
+        for (way_index = 0; way_index < num_of_ways; ++way_index)
+        {
+            if (ways[*way_index_for_new_block].sets[set_index].lru_index < ways[way_index].sets[set_index].lru_index)
+            {
+                *way_index_for_new_block = way_index;
+            }
+        }
+    }
+
     void update_lru_states(unsigned hit_way_index, unsigned set_index)
     {
         unsigned way_index = 0;
@@ -306,6 +335,40 @@ public:
     }
 
 
+    void calculate_address_of_evacuated_block(uint32_t * address_of_evacuated_block, unsigned tag_of_evacuated_block, unsigned set_of_evacuated_block)
+    {
+        *address_of_evacuated_block = (tag_of_evacuated_block << (num_of_set_bits + num_of_block_bits) | (set_of_evacuated_block << num_of_block_bits));
+    }
+    void free_block_from_lru_way(uint32_t address, set_t ** set_of_new_block, unsigned * set_index_of_new_block)
+    {
+        unsigned way_index_for_new_block = 0;
+        unsigned way_index = 0;
+        unsigned set_index = 0;
+        bool found_empty_set = false;
+
+        (void)get_set_from_address(&set_index, address);
+        (void)find_empty_set_in_cache(set_index, &way_index_for_new_block, &found_empty_set);
+
+        if (!found_empty_set)
+        {
+           (void)get_lru_way_index(set_index, &way_index_for_new_block);
+        }
+     
+        *set_of_new_block = &ways[way_index_for_new_block].sets[set_index];
+        *set_index_of_new_block = set_index;
+        (void)update_lru_states(way_index_for_new_block, set_index);
+    }
+
+
+    void update_block(set_t * set_for_update, uint32_t address, bool update_dirty)
+    {
+        set_for_update->valid = 1;
+        (void)get_tag_from_address(&set_for_update->tag, address);
+        if (update_dirty)
+        {
+            set_for_update->dirty = 1;
+        }
+    }
     ~CacheLevel() {};
 };
 
@@ -351,11 +414,11 @@ public:
     void read_handler(uint32_t address)
     {
         result_t result = MISS;
-        unsigned assigned_tag = 0;
-        unsigned tmp_index = 0;
-        set_t * free_set;
+        unsigned tag_of_address = 0;
+        unsigned set_index_of_new_block = 0;
+        set_t * set_of_new_block;
         set_t * hit_set;
-        uint32_t tmp_address = 0;
+        uint32_t address_of_evacuated_block = 0;
     
         (void)l1->search_address_in_cache(address, &result, &hit_set, true);
 
@@ -369,50 +432,37 @@ public:
 
             if (HIT == result)
             {
-
                 if (WRITE_ALLOCATE == miss_policy)
                 {           
-                    free_block_from_lru_way(l1, address, &free_set, &tmp_index);
+                    (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
 
-                    if(free_set->valid)
+                    if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
-                        if (free_set->dirty)
+                        (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                        if (HIT == result)
                         {
-                            free_set->dirty = 0;
-                            (void)l2->search_address_in_cache(address, &result, &hit_set, true);
-                            if (HIT == result)
-                            {
-                                hit_set->dirty = 1;
-                            }
-                      
+                            hit_set->dirty = 1;
                         }
                     }
-
-                    free_set->valid = 1;
-                    (void)l1->get_tag_from_address(&assigned_tag, address);
-                    free_set->tag = assigned_tag;
-
+                    (void)l1->update_block(set_of_new_block, address, false);
                 }
             }
             else
             {
-
                 if (WRITE_ALLOCATE == miss_policy)
-                {       
-
-
-           
-                    free_block_from_lru_way(l2, address, &free_set, &tmp_index);
-                    if(free_set->valid)
+                {                  
+                    (void)l2->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
+                    if(set_of_new_block->valid)
                     {
-                        if (free_set->dirty)
+                        if (set_of_new_block->dirty)
                         {
-                            free_set->dirty = 0;
+                            set_of_new_block->dirty = 0;
                         }
                         else
                         {
-                            tmp_address = (free_set->tag << (l2->num_of_set_bits + l2->num_of_block_bits) | (tmp_index << l2->num_of_block_bits));
-                            (void)l1->search_address_in_cache(tmp_address, &result, &hit_set, false);
+                            (void)l2->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
+                            (void)l1->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
+                            
                             if (HIT == result & hit_set->valid)
                             {
                                 hit_set->dirty = 0;
@@ -421,79 +471,34 @@ public:
                         }
                     }
                 
+                    (void)l2->update_block(set_of_new_block, address, false);
                    
-                    free_set->valid = 1;
-                    (void)l2->get_tag_from_address(&assigned_tag, address);
-                    free_set->tag = assigned_tag;
-                   
-                    free_block_from_lru_way(l1, address, &free_set, &tmp_index);
-                    if(free_set->valid)
+                    (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
+                    if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
-                        if (free_set->dirty)
+                        set_of_new_block->dirty = 0;
+
+                        (void)l1->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
+                        (void)l2->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
+                        if (HIT == result)
                         {
-                            free_set->dirty = 0;
-                            free_set->valid = 0;
-                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
-                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
-                            if (HIT == result)
-                            {
-                                hit_set->dirty = 1;
-                            }
-                       
+                            hit_set->dirty = 1;
                         }
-                        
-                     
                     }
-                    free_set->valid = 1;
-                    (void)l1->get_tag_from_address(&assigned_tag, address);
-                    free_set->tag = assigned_tag;
-
+                    (void)l1->update_block(set_of_new_block, address, false);
                 }
             }
         }
     }
 
-    void free_block_from_lru_way(CacheLevel * cache_level, uint32_t address, set_t ** free_set, unsigned * tmp_set_index)
-    {
-        unsigned lru_way = 0;
-        unsigned way_index = 0;
-        unsigned set_index = 0;
-        bool found_empty = false;
-        (void)cache_level->get_set_from_address(&set_index, address);
-
-        for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
-        {
-            
-            if (0 == cache_level->ways[way_index].sets[set_index].valid)
-            {
-               lru_way = way_index; 
-               found_empty = true;
-               break;
-            }
-        }
-        if (!found_empty)
-        {
-            for (way_index = 0; way_index < cache_level->num_of_ways; ++way_index)
-            {
-                if (cache_level->ways[lru_way].sets[set_index].lru_index < cache_level->ways[way_index].sets[set_index].lru_index)
-                {
-                    lru_way = way_index;
-                }
-            }
-        }
-     
-        *free_set = &cache_level->ways[lru_way].sets[set_index];
-        *tmp_set_index = set_index;
-        cache_level->update_lru_states(lru_way, set_index);
-    }
     void write_handler(uint32_t address)
     {
         result_t result = MISS;
         set_t * hit_set;
-        set_t * free_set;
-        unsigned tmp_index = 0;
-        uint32_t tmp_address = 0;
-        unsigned assigned_tag = 0;
+        set_t * set_of_new_block;
+        unsigned set_index_of_new_block = 0;
+        uint32_t address_of_evacuated_block = 0;
+        unsigned tag_of_address = 0;
 
 
         (void)l1->search_address_in_cache(address, &result, &hit_set, true);
@@ -511,27 +516,20 @@ public:
             {
                 if (WRITE_ALLOCATE == miss_policy)
                 {           
-                    free_block_from_lru_way(l1, address, &free_set, &tmp_index);
+                    (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
 
-                    if(free_set->valid)
+                    if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
-                        if (free_set->dirty)
+                        (void)l1->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
+                        (void)l2->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
+                        
+                        if (HIT == result)
                         {
-                            free_set->dirty = 0;
-                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
-
-                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
-                            if (HIT == result)
-                            {
-                                hit_set->dirty = 1;
-                            }
+                            hit_set->dirty = 1;
                         }
-                    }
 
-                    free_set->valid = 1;
-                    free_set->dirty = 1;
-                    (void)l1->get_tag_from_address(&assigned_tag, address);
-                    free_set->tag = assigned_tag;
+                    }
+                    (void)l1->update_block(set_of_new_block, address, true);
                 }
             }
             else
@@ -539,58 +537,39 @@ public:
 
                 if (WRITE_ALLOCATE == miss_policy)
                 {       
-             
-                    free_block_from_lru_way(l2, address, &free_set, &tmp_index);
-                    if(free_set->valid)
+                    (void)l2->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
+                    if(set_of_new_block->valid)
                     {
-                        if (free_set->dirty)
+                        if (set_of_new_block->dirty)
                         {
-                            free_set->dirty = 0;
+                            set_of_new_block->dirty = 0;
                         }
-               
-                        tmp_address = (free_set->tag << (l2->num_of_set_bits + l2->num_of_block_bits) | (tmp_index << l2->num_of_block_bits));
-                        (void)l1->search_address_in_cache(tmp_address, &result, &hit_set, false);
-                        if (HIT == result & hit_set->valid) //TODO checkalso of L1 is firty
+                        (void)l2->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
+                        (void)l1->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
+                        
+                        if (HIT == result & hit_set->valid) //TODO checkalso of L1 is dirty
                         {
                             hit_set->dirty = 0;
                             hit_set->valid = 0;
                         }
                     }
-            
-                    free_set->valid = 1;
-
-                    (void)l2->get_tag_from_address(&assigned_tag, address);
-                    free_set->tag = assigned_tag;
+                    (void)l2->update_block(set_of_new_block, address, false);
          
-                    free_block_from_lru_way(l1, address, &free_set, &tmp_index);
-                    if(free_set->valid)
+                    (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
+                    if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
-                        if (free_set->dirty)
-                        {
-                            free_set->dirty = 0;
-                            free_set->valid = 0;
-                            tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
-
-                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
+                            (void)l1->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
+                            (void)l2->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
                             if (HIT == result)
                             {
                                 hit_set->dirty = 1;
                             }
-        
-                        }
                     }
-                    free_set->valid = 1;
-                    (void)l1->get_tag_from_address(&assigned_tag, address);
-                    free_set->tag = assigned_tag;
-                    free_set->dirty = 1;
+
+                    (void)l1->update_block(set_of_new_block, address, true);
                 }
-
-
-
-
             }
         }
-
     }
     ~Cache() {};
 };

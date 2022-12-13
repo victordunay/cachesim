@@ -116,10 +116,10 @@ int main(int argc, char **argv)
 	
 	}
 
-	double L1Hits=(cache.l1->num_of_access - cache.l1->num_of_miss);
-	double L2Hits=(cache.l2->num_of_access - cache.l2->num_of_miss);
-	double L1MissRate= (cache.l1->num_of_miss)/(1.0*cache.l1->num_of_access);
-	double L2MissRate= (cache.l2->num_of_miss)/(1.0*cache.l2->num_of_access);
+	double L1Hits =(cache.l1->num_of_access - cache.l1->num_of_miss);
+	double L2Hits =(cache.l2->num_of_access - cache.l2->num_of_miss);
+	double L1MissRate = (cache.l1->num_of_miss)/(1.0*cache.l1->num_of_access);
+	double L2MissRate = (cache.l2->num_of_miss)/(1.0*cache.l2->num_of_access);
 
 	double avgAccTime= (( (1-L1MissRate)* (L1Cyc) )  +  (L1MissRate)*(1-L2MissRate)*(L1Cyc+L2Cyc)  +  (L1MissRate)*(L2MissRate)*(L1Cyc+L2Cyc+MemCyc));																			
 	printf("L1miss=%.03f ", L1MissRate);												
