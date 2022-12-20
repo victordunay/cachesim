@@ -437,7 +437,7 @@ public:
 
                     if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
-                        (void)l2->search_address_in_cache(address, &result, &hit_set, true);
+                        (void)l2->search_address_in_cache(address, &result, &hit_set, false);
                         if (HIT == result)
                         {
                             hit_set->dirty = 1;
