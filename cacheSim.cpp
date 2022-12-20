@@ -112,6 +112,7 @@ int main(int argc, char **argv)
 
 		// DEBUG - remove this line
 		cout << "" ;
+		// handle read or write operations on cache and update miss/hit parameters
 		(void)cache.operation_handler((operation_t)operation, trace_address);
 	
 	}

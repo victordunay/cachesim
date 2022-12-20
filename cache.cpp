@@ -171,12 +171,16 @@ public:
     unsigned num_of_miss;
     unsigned num_of_access;
 
+    // L1 or L2 cache class
     CacheLevel(unsigned num_of_ways, unsigned block_size_in_bytes, unsigned access_time, unsigned cache_size_in_bytes)
     {
+        // assign cache parameters
         this->access_time = access_time;
         this->num_of_ways = num_of_ways;
         this->num_of_miss = 0;
         this->num_of_access = 0;
+
+        // calculate control parameters from input 
         calculate_block_address_mask(block_size_in_bytes, &block_address_mask);
 
         calculate_num_of_sets(&num_of_sets, cache_size_in_bytes, block_size_in_bytes, num_of_ways);
@@ -187,10 +191,12 @@ public:
         set_offset_in_bits = num_of_block_bits;
         tag_offset_in_bits = num_of_block_bits + num_of_set_bits;
 
+        // calculate tag, block and set masks
         calculate_mask(num_of_set_bits, &this->set_mask);
         calculate_mask(num_of_tag_bits, &this->tag_mask);
         calculate_mask(num_of_block_bits, &this->block_mask);
         
+        // initalize ways for current cache level
         ways = new Way[num_of_ways];
         for(unsigned way_index = 0; way_index < num_of_ways; way_index++) 
         {
@@ -280,6 +286,7 @@ public:
         {
             num_of_access = num_of_access + 1;
         }
+        // assign set and tag from input address
         (void)get_tag_from_address(&required_tag, address);
         (void)get_set_from_address(&set_index, address);
         (void)get_block_offset_from_address(&offset_in_block, address); // unused?
@@ -287,6 +294,7 @@ public:
         for (way_index = 0; way_index < num_of_ways; ++way_index)
         {
             ways[way_index].get_tag_from_set(set_index, &cache_tag);
+            // in case that address in memory
             if ((cache_tag == required_tag) & ways[way_index].is_valid_set(set_index))
             {
                 *result = HIT;
@@ -297,6 +305,7 @@ public:
                 break;               
             }
         }
+        // increase miss counter if address is not in cache
         if (MISS == *result & enable_counter)
         {
             this->num_of_miss++;
@@ -324,13 +333,14 @@ public:
         unsigned current_lru_index = ways[hit_way_index].sets[set_index].lru_index;
         
         for (way_index = 0; way_index < num_of_ways; ++way_index)
-        {
+        {   
+            // according to lru state maching, update values of lru indexes
             if (ways[way_index].sets[set_index].lru_index < current_lru_index)
             {
                 ways[way_index].sets[set_index].lru_index++;
             }
         }
-
+        // assign lru index at 0 
         ways[hit_way_index].sets[set_index].lru_index = 0;
     }
 
@@ -339,6 +349,7 @@ public:
     {
         *address_of_evacuated_block = (tag_of_evacuated_block << (num_of_set_bits + num_of_block_bits) | (set_of_evacuated_block << num_of_block_bits));
     }
+    // this function returns the address of required block for evacuation
     void free_block_from_lru_way(uint32_t address, set_t ** set_of_new_block, unsigned * set_index_of_new_block)
     {
         unsigned way_index_for_new_block = 0;
@@ -347,10 +358,12 @@ public:
         bool found_empty_set = false;
 
         (void)get_set_from_address(&set_index, address);
+        // this function search for a free block in ways
         (void)find_empty_set_in_cache(set_index, &way_index_for_new_block, &found_empty_set);
 
         if (!found_empty_set)
         {
+            // in case that there is no free set, get the lru set for evacuation
            (void)get_lru_way_index(set_index, &way_index_for_new_block);
         }
      
@@ -382,15 +395,13 @@ public:
     unsigned block_size_in_bytes;
     miss_policy_t miss_policy;
  
-
-
-
     Cache(cache_t cache_parameters)
     {
         this->block_size_in_bytes = cache_parameters.block_size_in_bytes;
         this->l1_ways = cache_parameters.l1_ways;
         this->miss_policy = cache_parameters.miss_policy;
    
+        // initialize L1 and L2 caches
         l1 = new CacheLevel(cache_parameters.l1_ways, cache_parameters.block_size_in_bytes, cache_parameters.l1_access_time, cache_parameters.l1_size_in_bytes);
         l2 = new CacheLevel(cache_parameters.l2_ways, cache_parameters.block_size_in_bytes, cache_parameters.l2_access_time, cache_parameters.l2_size_in_bytes);
     }   
@@ -419,24 +430,29 @@ public:
         set_t * set_of_new_block;
         set_t * hit_set;
         uint32_t address_of_evacuated_block = 0;
-    
+
+        // search address in L1 cache 
         (void)l1->search_address_in_cache(address, &result, &hit_set, true);
 
         if (HIT == result)
         {
+            // found address in L1 cache
             return;
         }
         else
         {
+            //if L1 miss, search address in L2 cache 
+
             (void)l2->search_address_in_cache(address, &result, &hit_set, true);
 
             if (HIT == result)
             {
-                       
+                    // found address in L2 cache  
                     (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
 
                     if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
+                        //evacuated block from L1 is dirty, handle that
                         (void)l1->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
                         (void)l2->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
                         if (HIT == result)
@@ -444,21 +460,24 @@ public:
                             hit_set->dirty = 1;
                         }
                     }
+                    // assign new tag for L1 block
                     (void)l1->update_block(set_of_new_block, address, false);
                 
             }
             else
-            {
-                                  
+            {   
+                    // bring data from main memory 
                     (void)l2->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
                     if(set_of_new_block->valid)
                     {
+                        // in case that L2 block is dirty
                         if (set_of_new_block->dirty)
                         {
                             set_of_new_block->dirty = 0;
                         }
                         else
                         {
+                            // search coresponding block in L1 
                             (void)l2->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
                             (void)l1->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
                             
@@ -471,7 +490,7 @@ public:
                     }
                 
                     (void)l2->update_block(set_of_new_block, address, false);
-                   
+                    // after updating L2 blockm update L1 block
                     (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
                     if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
@@ -485,7 +504,6 @@ public:
                         }
                     }
                     (void)l1->update_block(set_of_new_block, address, false);
-                
             }
         }
     }
@@ -499,22 +517,26 @@ public:
         uint32_t address_of_evacuated_block = 0;
         unsigned tag_of_address = 0;
 
-
+        // search block in L1 
         (void)l1->search_address_in_cache(address, &result, &hit_set, true);
 
         if (HIT == result)
         {
+            // address found in L1 , mark dirty
             hit_set->dirty = 1;
             return;
         }
         else
         {
+            //in case of L1 miss, search block in L2
+
             (void)l2->search_address_in_cache(address, &result, &hit_set, true);
 
             if (HIT == result)
             {
                 if (WRITE_ALLOCATE == miss_policy)
-                {           
+                {      
+                    // update block at L1 if policy is WRITE ALLOCATE     
                     (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
 
                     if(set_of_new_block->valid & set_of_new_block->dirty)
@@ -528,14 +550,17 @@ public:
                         }
 
                     }
+
                     (void)l1->update_block(set_of_new_block, address, true);
                 }
             }
             else
             {
-
+                // address is not in L1 or L2, bring from main memory according to policy
                 if (WRITE_ALLOCATE == miss_policy)
                 {       
+                    // update block at L2 if policy is WRITE ALLOCATE     
+
                     (void)l2->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
                     if(set_of_new_block->valid)
                     {
@@ -553,7 +578,7 @@ public:
                         }
                     }
                     (void)l2->update_block(set_of_new_block, address, false);
-         
+                    // being to L1 after updating L2 block
                     (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
                     if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
