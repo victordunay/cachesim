@@ -117,9 +117,10 @@ int main(int argc, char **argv)
 	printf("    num_of_sets = %d\n", cache.l2->num_of_sets);
 	printf("    num_of_ways = %d\n", cache.l2->num_of_ways);
 
-
+	int counter = 0;
 	while (getline(file, line)) {
-
+		printf("iteration  %d >>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", counter);
+		counter++;
 		stringstream ss(line);
 		string address;
 		char operation = 0; // read (R) or write (W)

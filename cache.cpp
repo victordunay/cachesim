@@ -399,7 +399,7 @@ public:
                             free_set->dirty = 0;
                             tmp_address = (free_set->tag << (l1->num_of_set_bits + l1->num_of_block_bits) | (tmp_index << l1->num_of_block_bits));
                             printf("tmp address = %x\n", tmp_address);
-                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, true);
+                            (void)l2->search_address_in_cache(tmp_address, &result, &hit_set, false);
                             if (HIT == result)
                             {
                                 printf("evacuated block correctly!\n");
@@ -587,7 +587,7 @@ public:
             {
                 printf("found in L2!\n");
 
-                              printf("ERROR CANDIDATE<<<<<<<<<<<<<<<<<<\n");
+                printf("ERROR CANDIDATE of write handler<<<<<<<<<<<<<<<<<<\n");
 
                     free_block_from_lru_way(l1, address, &free_set, &tmp_index);
 
