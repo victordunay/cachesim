@@ -437,7 +437,8 @@ public:
 
                     if(set_of_new_block->valid & set_of_new_block->dirty)
                     {
-                        (void)l2->search_address_in_cache(address, &result, &hit_set, false);
+                        (void)l1->calculate_address_of_evacuated_block(&address_of_evacuated_block, set_of_new_block->tag, set_index_of_new_block);
+                        (void)l2->search_address_in_cache(address_of_evacuated_block, &result, &hit_set, false);
                         if (HIT == result)
                         {
                             hit_set->dirty = 1;
