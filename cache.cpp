@@ -432,8 +432,7 @@ public:
 
             if (HIT == result)
             {
-                if (WRITE_ALLOCATE == miss_policy)
-                {           
+                       
                     (void)l1->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
 
                     if(set_of_new_block->valid & set_of_new_block->dirty)
@@ -445,12 +444,11 @@ public:
                         }
                     }
                     (void)l1->update_block(set_of_new_block, address, false);
-                }
+                
             }
             else
             {
-                if (WRITE_ALLOCATE == miss_policy)
-                {                  
+                                  
                     (void)l2->free_block_from_lru_way(address, &set_of_new_block, &set_index_of_new_block);
                     if(set_of_new_block->valid)
                     {
@@ -486,7 +484,7 @@ public:
                         }
                     }
                     (void)l1->update_block(set_of_new_block, address, false);
-                }
+                
             }
         }
     }
